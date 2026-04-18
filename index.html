@@ -1681,9 +1681,151 @@
       background: #f0ebe0;
     }
 
+    /* ── intro modal ── */
+    .hint-modal {
+      position: fixed; inset: 0;
+      background: rgba(28, 18, 8, 0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      opacity: 0; pointer-events: none;
+      transition: opacity 180ms ease;
+      font-family: "PPMondwest", ui-monospace, Menlo, monospace;
+    }
+    .hint-modal.open { opacity: 1; pointer-events: auto; }
+    .hint-modal .box {
+      background: var(--bg, #FAF8F4);
+      border: 1px solid var(--ink, #1c1208);
+      padding: 28px 34px 22px;
+      max-width: 420px;
+      color: var(--ink, #1c1208);
+      text-align: left;
+    }
+    .hint-modal .box h2 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+    }
+    .hint-modal .box .row {
+      display: flex; gap: 16px;
+      align-items: baseline;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+    .hint-modal .box .key {
+      min-width: 110px;
+      color: #ED682B;
+      font-family: "PPNeueBit", ui-monospace, monospace;
+      letter-spacing: 0.04em;
+    }
+    .hint-modal .box button {
+      margin-top: 20px;
+      background: var(--ink, #1c1208);
+      color: var(--bg, #FAF8F4);
+      border: none;
+      padding: 8px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+    .hint-modal .box button:hover { filter: brightness(1.15); }
+
+    /* ── grid overview ── */
+    .grid-view {
+      position: fixed; inset: 0;
+      background: var(--bg, #FAF8F4);
+      z-index: 900;
+      overflow-y: auto;
+      padding: 24px;
+      display: none;
+      font-family: "PPMondwest", ui-monospace, Menlo, monospace;
+      color: var(--ink, #1c1208);
+    }
+    .grid-view.open { display: block; }
+    .grid-view .head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      max-width: 1600px; margin: 0 auto 20px;
+      font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #6a5a44;
+    }
+    .grid-view .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 18px;
+      max-width: 1600px; margin: 0 auto;
+    }
+    .grid-view .cell {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: var(--bg, #FAF8F4);
+      border: 1px solid #d8cfbf;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 120ms ease, transform 120ms ease;
+    }
+    .grid-view .cell:hover {
+      border-color: var(--ink, #1c1208);
+      transform: translateY(-2px);
+    }
+    .grid-view .cell.current {
+      border: 2px solid #ED682B;
+    }
+    .grid-view .cell .thumb {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1440px; height: 810px;
+      transform-origin: top left;
+      pointer-events: none;
+    }
+    .grid-view .cell .thumb > .slide {
+      position: absolute; inset: 0;
+      width: 1440px; height: 810px;
+      opacity: 1 !important;
+      display: flex;
+    }
+    .grid-view .cell .num {
+      position: absolute;
+      bottom: 6px; left: 8px;
+      font-size: 13px;
+      color: #6a5a44;
+      background: rgba(250, 248, 244, 0.85);
+      padding: 1px 6px;
+      z-index: 2;
+    }
+    .grid-view .cell .video-placeholder {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      gap: 6px;
+      background: #1c1208;
+      color: #FAF8F4;
+      font-family: "PPNeueBit", monospace;
+    }
+    .grid-view .cell .video-placeholder .play { font-size: 28px; }
+    .grid-view .cell .video-placeholder .lbl { font-size: 12px; letter-spacing: 0.1em; }
+
   </style>
 </head>
 <body>
+
+<div class="hint-modal" id="hintModal">
+  <div class="box">
+    <h2>how to navigate</h2>
+    <div class="row"><span class="key">→ or space</span><span>next slide</span></div>
+    <div class="row"><span class="key">←</span><span>previous slide</span></div>
+    <div class="row"><span class="key">Esc</span><span>toggle grid view</span></div>
+    <button id="hintDismiss">got it</button>
+  </div>
+</div>
+
+<div class="grid-view" id="gridView">
+  <div class="head">
+    <span>all slides / press Esc to return</span>
+    <span id="gridCount"></span>
+  </div>
+  <div class="grid" id="gridCells"></div>
+</div>
 
 <div class="deck">
 
@@ -2373,13 +2515,121 @@
 
   syncCounter();
 
+  // ── intro modal ──
+  const modal = document.getElementById('hintModal');
+  const dismissBtn = document.getElementById('hintDismiss');
+  const HINT_KEY = 'bt-slides-hint-seen';
+  function openModal() { modal.classList.add('open'); }
+  function closeModal() {
+    if (!modal.classList.contains('open')) return;
+    modal.classList.remove('open');
+    localStorage.setItem(HINT_KEY, '1');
+  }
+  if (!localStorage.getItem(HINT_KEY)) openModal();
+  dismissBtn.addEventListener('click', (e) => { e.stopPropagation(); closeModal(); });
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+  // ── grid view ──
+  const gridView = document.getElementById('gridView');
+  const gridCells = document.getElementById('gridCells');
+  const gridCount = document.getElementById('gridCount');
+  let gridBuilt = false;
+
+  function buildGrid() {
+    if (gridBuilt) return;
+    slides.forEach((slide, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.index = i;
+
+      // video slides get a placeholder — iframes don't scale cleanly
+      const hasIframe = slide.querySelector('iframe');
+      if (hasIframe) {
+        const ph = document.createElement('div');
+        ph.className = 'video-placeholder';
+        const play = document.createElement('div'); play.className = 'play'; play.textContent = '▶';
+        const lbl = document.createElement('div'); lbl.className = 'lbl';
+        lbl.textContent = slide.classList.contains('s11') ? 'demo 1' : 'demo 2';
+        ph.appendChild(play); ph.appendChild(lbl);
+        cell.appendChild(ph);
+      } else {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        const clone = slide.cloneNode(true);
+        clone.classList.remove('active');
+        thumb.appendChild(clone);
+        cell.appendChild(thumb);
+      }
+
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(i + 1).padStart(2, '0');
+      cell.appendChild(num);
+
+      cell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeGrid();
+        go(i);
+      });
+
+      gridCells.appendChild(cell);
+    });
+    gridCount.textContent = total + ' slides';
+    gridBuilt = true;
+    // scale thumbs to fit their cell width
+    scaleThumbs();
+    window.addEventListener('resize', scaleThumbs);
+  }
+
+  function scaleThumbs() {
+    gridCells.querySelectorAll('.cell').forEach(cell => {
+      const thumb = cell.querySelector('.thumb');
+      if (!thumb) return;
+      const w = cell.clientWidth;
+      thumb.style.transform = 'scale(' + (w / 1440) + ')';
+    });
+  }
+
+  function openGrid() {
+    buildGrid();
+    gridView.classList.add('open');
+    gridCells.querySelectorAll('.cell').forEach((c, i) => {
+      c.classList.toggle('current', i === cur);
+    });
+    scaleThumbs();
+  }
+  function closeGrid() { gridView.classList.remove('open'); }
+  function toggleGrid() {
+    if (gridView.classList.contains('open')) closeGrid();
+    else openGrid();
+  }
+
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (modal.classList.contains('open')) { closeModal(); return; }
+      e.preventDefault();
+      toggleGrid();
+      return;
+    }
+    if (modal.classList.contains('open') || gridView.classList.contains('open')) {
+      if (['ArrowRight','ArrowLeft','ArrowDown','ArrowUp',' '].includes(e.key)) {
+        if (modal.classList.contains('open')) { e.preventDefault(); closeModal(); }
+      }
+      return;
+    }
     if (['ArrowRight', 'ArrowDown', ' '].includes(e.key)) { e.preventDefault(); go(cur + 1); }
     if (['ArrowLeft',  'ArrowUp'        ].includes(e.key)) { e.preventDefault(); go(cur - 1); }
   });
 
-  // click anywhere to advance
-  document.addEventListener('click', () => go(cur + 1));
+  // click anywhere to advance (but not when modal/grid open, and not on interactive elements)
+  document.addEventListener('click', (e) => {
+    if (modal.classList.contains('open')) return;
+    if (gridView.classList.contains('open')) return;
+    // don't advance on clicks inside iframes, links, or the video slides
+    const t = e.target;
+    if (t.closest('iframe, a, button, input, textarea, video')) return;
+    go(cur + 1);
+  });
 
   // ── s16 CLI grid: dense cells flickering with random timing (GitHub vibe) ──
   (function initS16Grid() {
